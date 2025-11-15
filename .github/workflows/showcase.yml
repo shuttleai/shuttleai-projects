@@ -85,7 +85,7 @@ jobs:
               "description": "$MESSAGE",
               "color": 3447003,
               "footer": {
-                "text": "Add \`shuttleai\` topic to your repo to be featured! 👉 https://github.com/topics/shuttleai"
+                "text": "Add \`shuttleai\` topic to your repo to be featured! 👉 https://github.com/topics/shuttleai | https://github.com/shuttleai/shuttleai-projects"
               }
             }],
             "thread_name": "New GitHub Projects"
