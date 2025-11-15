@@ -5,5 +5,12 @@
     "owner": "shuttleai",
     "url": "https://github.com/shuttleai/shuttleai-python",
     "desc": "The official Python library for the ShuttleAI API"
+  },
+  {
+    "id": 1096781309,
+    "name": "shuttleai-projects",
+    "owner": "shuttleai",
+    "url": "https://github.com/shuttleai/shuttleai-projects",
+    "desc": "\"Opt-In\" Auto-Ping via GitHub Topics for ShuttleAI. Show off your projects that use ShuttleAI, get it featured."
   }
 ]
