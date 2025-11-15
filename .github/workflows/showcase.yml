@@ -61,7 +61,7 @@ jobs:
 
           # Update seen with new ones (deduped by ID)
           UPDATED_SEEN=$(echo "$SEEN_JSON" | \
-            jq --argjson new "$NEW_REPOS" \
+            jq --argjson seen "$SEEN_JSON" --argjson new "$NEW_REPOS" \
             '$seen + $new | group_by(.id) | map(.[0])')
           echo "$UPDATED_SEEN" > seen_repos.json
 
