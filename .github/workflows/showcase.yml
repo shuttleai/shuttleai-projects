@@ -75,20 +75,22 @@ jobs:
         if: steps.process.outputs.has_new == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+          MESSAGE: ${{ steps.process.outputs.message }}
         run: |
-          curl -s -H "Content-Type: application/json" \
-            -d '{
-              "content": "New ShuttleAI-powered projects just dropped! Check them out and show some love 🚀",
-              "embeds": [{
-                "title": "Latest Projects on GitHub",
-                "description": "'"${{ steps.process.outputs.message }}"'",
-                "color": 3447003,
-                "footer": {
-                  "text": "Add `shuttleai-project` topic to your repo to be featured! 👉 https://github.com/topics/shuttleai-project"
-                }
-              }]
-            }' \
-            "$WEBHOOK_URL"
+          cat << EOF | curl -s -H "Content-Type: application/json" -d @- "$WEBHOOK_URL"
+          {
+            "content": "New ShuttleAI-powered projects just dropped! Check them out and show some love 🚀",
+            "embeds": [{
+              "title": "Latest Projects on GitHub",
+              "description": "$MESSAGE",
+              "color": 3447003,
+              "footer": {
+                "text": "Add \`shuttleai-project\` topic to your repo to be featured! 👉 https://github.com/topics/shuttleai-project"
+              }
+            }],
+            "thread_name": "New GitHub Projects"
+          }
+          EOF
       - name: Commit updated seen file (if changed)
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
