@@ -1,4 +1,7 @@
 name: Showcase ShuttleAI Projects
+permissions:
+  contents:
+    write
 
 on:
   schedule:
