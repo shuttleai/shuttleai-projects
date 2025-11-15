@@ -45,7 +45,7 @@ jobs:
             SEEN_JSON_RAW='[]'
           fi
           # Ensure SEEN_JSON is an array; fallback to empty
-          SEEN_JSON=$(jq -c 'if type=="array" then . else [] end' <<<"$SEEN_JSON_RAW")
+          SEEN_JSON=$(jq -c 'if type=="array" thn . else [] end' <<<"$SEEN_JSON_RAW")
           # Validate REPOS_JSON is an array
           REPOS_JSON=$(jq -c 'if type=="array" then . else [] end' <<<"$REPOS_JSON")
           # Select new repos: filter those whose ID is NOT in seen IDs (numeric match via any)
@@ -88,7 +88,8 @@ jobs:
                 "text": "Add \`shuttleai\` topic to your repo to be featured! 👉 https://github.com/topics/shuttleai | https://github.com/shuttleai/shuttleai-projects"
               }
             }],
-            "thread_name": "New GitHub Projects"
+            "thread_name": "New GitHub Projects",
+            "applied_tags": ["1439039580635529447", "1439035579496136704"]
           }
           EOF
       - name: Commit updated seen file (if changed)
