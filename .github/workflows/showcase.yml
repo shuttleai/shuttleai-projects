@@ -1,0 +1,97 @@
+name: Showcase ShuttleAI Projects
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:  # Manual trigger for testing
+
+jobs:
+  showcase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Fetch and process new repos
+        id: process
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch latest 5 repos updated with the topic (non-forks, public)
+          REPOS_JSON=$(curl -s \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/search/repositories?q=topic:shuttleai-project+fork:false&sort=updated&order=desc&per_page=5" | \
+            jq '.items | map({
+              id: .id,
+              name: .name,
+              owner: .owner.login,
+              url: .html_url,
+              desc: (.description // "No description provided")
+            })')
+
+          # Load seen repos (JSON array of objects)
+          if [ -f seen_repos.json ]; then
+            SEEN_JSON=$(cat seen_repos.json)
+          else
+            SEEN_JSON='[]'
+          fi
+
+          # Filter to new repos (not in seen, take top 3 newest)
+          NEW_REPOS=$(echo "$REPOS_JSON" | \
+            jq --argjson seen "$SEEN_JSON" \
+            '[.[] | select( $seen | index(.id) | not ) ] | .[0:3]')
+
+          # Check if any new
+          NEW_COUNT=$(echo "$NEW_REPOS" | jq 'length')
+          if [ "$NEW_COUNT" -gt 0 ]; then
+            MESSAGE=$(echo "$NEW_REPOS" | \
+              jq -r '(map("- **\(.name)** by @\(.owner)\n  \(.url)\n  \(.desc)") | join("\n\n"))')
+            echo "has_new=true" >> $GITHUB_OUTPUT
+            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo "$MESSAGE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "new_count=$NEW_COUNT" >> $GITHUB_OUTPUT
+          else
+            echo "has_new=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Update seen with new ones (deduped by ID)
+          UPDATED_SEEN=$(echo "$SEEN_JSON" | \
+            jq --argjson new "$NEW_REPOS" \
+            '$seen + $new | group_by(.id) | map(.[0])')
+          echo "$UPDATED_SEEN" > seen_repos.json
+
+      - name: Send update to Discord
+        if: steps.process.outputs.has_new == 'true'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d '{
+              "content": "New ShuttleAI-powered projects just dropped! Check them out and show some love 🚀",
+              "embeds": [{
+                "title": "Latest Projects on GitHub",
+                "description": "'"${{ steps.process.outputs.message }}"'",
+                "color": 3447003,
+                "footer": {
+                  "text": "Add `shuttleai-project` topic to your repo to be featured! 👉 https://github.com/topics/shuttleai-project"
+                }
+              }]
+            }' \
+            "$WEBHOOK_URL"
+
+      - name: Commit updated seen file (if changed)
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add seen_repos.json
+          if ! git diff --staged --quiet; then
+            git commit -m "Update seen repos list [skip ci]"
+            git push
+          else
+            echo "No changes to seen file"
+          fi
