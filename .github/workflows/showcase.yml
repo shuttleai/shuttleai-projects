@@ -31,13 +31,13 @@ jobs:
             exit 1
           fi
           REPOS_JSON=$(echo "$BODY" | jq -c '.items // [] | map({
-            id: .id,
+            id: (.id | tonumber),
             name: .name,
             owner: .owner.login,
             url: .html_url,
             desc: (.description // "No description provided")
           })')
-          echo "Fetched repos: $REPOS_JSON"  # Debug log
+          echo "Fetched repos: $(echo "$REPOS_JSON" | jq -r '.')"  # Debug log (pretty)
           # Load seen repos (JSON array of objects)
           if [ -f seen_repos.json ]; then
             SEEN_JSON_RAW=$(cat seen_repos.json)
@@ -48,14 +48,12 @@ jobs:
           SEEN_JSON=$(jq -c 'if type=="array" then . else [] end' <<<"$SEEN_JSON_RAW")
           # Validate REPOS_JSON is an array
           REPOS_JSON=$(jq -c 'if type=="array" then . else [] end' <<<"$REPOS_JSON")
-          # Extract seen IDs as array for lookup
-          SEEN_IDS=$(jq -c 'map(.id)' <<<"$SEEN_JSON")
-          # Select new repos: filter those not in seen (numeric ID comparison)
-          NEW_REPOS=$(jq -c --argjson seen_ids "$SEEN_IDS" '
-            [ .[] | select( $seen_ids | index(.id) | not // true ) ] | .[0:3]
+          # Select new repos: filter those whose ID is NOT in seen IDs (numeric match via any)
+          NEW_REPOS=$(jq -c --argjson seen "$SEEN_JSON" '
+            [ .[] | select( (.id as $repo_id | $seen | any(.id == $repo_id) | not) ) ] | .[0:3]
           ' <<<"$REPOS_JSON")
           NEW_REPOS=$(jq -c 'if type=="array" then . else [] end' <<<"$NEW_REPOS")
-          echo "New repos: $NEW_REPOS"  # Debug log
+          echo "New repos: $(echo "$NEW_REPOS" | jq -r '.')"  # Debug log (pretty)
           # Check if any new
           NEW_COUNT=$(jq 'length' <<<"$NEW_REPOS")
           if [ "$NEW_COUNT" -gt 0 ]; then
