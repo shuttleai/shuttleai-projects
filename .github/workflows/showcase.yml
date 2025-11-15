@@ -1,41 +1,35 @@
 name: Showcase ShuttleAI Projects
 permissions:
   contents: write
-
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    - cron: '0 */6 * * *' # Every 6 hours
   workflow_dispatch:
-
 jobs:
   showcase:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
-
       - name: Fetch and process new repos
         id: process
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
           # Fetch latest 5 repos updated with the topic (non-forks, public)
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/search/repositories?q=topic:shuttleai+fork:false&sort=updated&order=desc&per_page=5")
+            "https://api.github.com/search/repositories?q=topic:shuttleai-project+fork:false&sort=updated&order=desc&per_page=5")
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
           if [ "$HTTP_CODE" -ne 200 ]; then
             echo "GitHub API returned $HTTP_CODE: $BODY"
             exit 1
           fi
-
           REPOS_JSON=$(echo "$BODY" | jq -c '.items // [] | map({
             id: .id,
             name: .name,
@@ -43,34 +37,27 @@ jobs:
             url: .html_url,
             desc: (.description // "No description provided")
           })')
-
+          echo "Fetched repos: $REPOS_JSON"  # Debug log
           # Load seen repos (JSON array of objects)
           if [ -f seen_repos.json ]; then
             SEEN_JSON_RAW=$(cat seen_repos.json)
           else
             SEEN_JSON_RAW='[]'
           fi
-
           # Ensure SEEN_JSON is an array; fallback to empty
           SEEN_JSON=$(jq -c 'if type=="array" then . else [] end' <<<"$SEEN_JSON_RAW")
-
-          # Normalize seen ids to strings to avoid numeric/string mismatch
-          SEEN_IDS=$(jq -c 'map(.id | tostring)' <<<"$SEEN_JSON")
-
           # Validate REPOS_JSON is an array
           REPOS_JSON=$(jq -c 'if type=="array" then . else [] end' <<<"$REPOS_JSON")
-
-          # Select new repos: compare stringified ids
-          NEW_REPOS=$(jq -c --argjson seen_ids "$SEEN_IDS" '
-            [ .[] | select( ($seen_ids | index((.id | tostring))) | not ) ] | .[0:3]
+          # Select new repos: filter those not in seen (numeric ID comparison)
+          NEW_REPOS=$(jq -c --argjson seen "$SEEN_JSON" '
+            [ .[] | select( ($seen | map(.id) | index(.id) | not // true) ) ] | .[0:3]
           ' <<<"$REPOS_JSON")
-
           NEW_REPOS=$(jq -c 'if type=="array" then . else [] end' <<<"$NEW_REPOS")
-
+          echo "New repos: $NEW_REPOS"  # Debug log
           # Check if any new
           NEW_COUNT=$(jq 'length' <<<"$NEW_REPOS")
           if [ "$NEW_COUNT" -gt 0 ]; then
-            MESSAGE=$(jq -r '(map("- **\(.name)** by @\(.owner)\n  \(.url)\n  \(.desc)") | join("\n\n"))' <<<"$NEW_REPOS")
+            MESSAGE=$(jq -r '(map("- **\(.name)** by @\(.owner)\n \(.url)\n \(.desc)") | join("\n\n"))' <<<"$NEW_REPOS")
             echo "has_new=true" >> $GITHUB_OUTPUT
             echo "message<<EOF" >> $GITHUB_OUTPUT
             echo "$MESSAGE" >> $GITHUB_OUTPUT
@@ -79,13 +66,11 @@ jobs:
           else
             echo "has_new=false" >> $GITHUB_OUTPUT
           fi
-
           # Update seen with new ones (deduped by ID). Sort + group_by requires sorting.
           UPDATED_SEEN=$(jq -n --argjson seen "$SEEN_JSON" --argjson new "$NEW_REPOS" '
             ($seen + $new) | sort_by(.id) | group_by(.id) | map(.[0])
           ')
           echo "$UPDATED_SEEN" > seen_repos.json
-
       - name: Send update to Discord
         if: steps.process.outputs.has_new == 'true'
         env:
@@ -104,7 +89,6 @@ jobs:
               }]
             }' \
             "$WEBHOOK_URL"
-
       - name: Commit updated seen file (if changed)
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
